@@ -8,8 +8,6 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 import uuid
 
-
-
 app = FastAPI()
 transactions = {}
 templates = Jinja2Templates(directory="templates")
