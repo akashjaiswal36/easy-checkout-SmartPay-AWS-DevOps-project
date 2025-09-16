@@ -1,0 +1,3 @@
+controller:
+  extraArgs:
+    update-status: "false"
