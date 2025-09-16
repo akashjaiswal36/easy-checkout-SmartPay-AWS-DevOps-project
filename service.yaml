@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: smartpay-service
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: smartpay
   ports:
