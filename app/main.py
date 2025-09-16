@@ -4,8 +4,6 @@ import boto3
 import json
 import logging
 
-
-
 app = FastAPI()
 transactions = {}
 
