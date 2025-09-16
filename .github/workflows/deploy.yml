@@ -1,45 +1,74 @@
-name: Deploy to EKS
+name: Secure Deploy to EKS
 
 on:
-#  push:
-#    branches:
-#      - main
-  workflow_dispatch: # 👈 This enables manual triggering
+  workflow_dispatch:  # Manual trigger only
 
+env:
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: 178502900821.dkr.ecr.ap-south-1.amazonaws.com
+  ECR_REPOSITORY: smartpay-service
+  CLUSTER_NAME: smartpay-cluster
+  IMAGE_TAG: latest
 
 jobs:
-  deploy:
+  security-scan:
+    name: Trivy + Gitleaks Scan
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Run Trivy (filesystem scan)
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
+        exit-code: '0'
+        severity: 'CRITICAL,HIGH'
+        ignore-unfixed: true
+        scanners: 'vuln,secret,config'
+
+    - name: Run Gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-and-deploy:
+    name: Build, Push, and Deploy
+    runs-on: ubuntu-latest
+    needs: security-scan
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ap-south-1
+        aws-region: ${{ env.AWS_REGION }}
 
     - name: Login to Amazon ECR
       run: |
-        aws ecr get-login-password --region ap-south-1 | \
-        docker login --username AWS --password-stdin 178502900821.dkr.ecr.ap-south-1.amazonaws.com
+        aws ecr get-login-password --region $AWS_REGION | \
+        docker login --username AWS --password-stdin $ECR_REGISTRY
 
     - name: Build and tag Docker image
       run: |
-        docker build -t smartpay .
-        docker tag smartpay:latest 178502900821.dkr.ecr.ap-south-1.amazonaws.com/smartpay-service:latest
+        docker build -t $ECR_REPOSITORY .
+        docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
     - name: Push image to ECR
-      run: | 
-        docker push 178502900821.dkr.ecr.ap-south-1.amazonaws.com/smartpay-service:latest
-
+      run: |
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
     - name: Update deployment in EKS
       run: |
-        aws eks update-kubeconfig --region ap-south-1 --name smartpay-cluster
+        aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+        kubectl set image deployment/smartpay smartpay=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         kubectl rollout restart deployment smartpay
-
-
