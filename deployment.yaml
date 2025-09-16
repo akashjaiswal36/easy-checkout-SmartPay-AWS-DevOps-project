@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smartpay
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: smartpay
+  template:
+    metadata:
+      labels:
+        app: smartpay
+    spec:
+      containers:
+      - name: smartpay
+        image: 178502900821.dkr.ecr.ap-south-1.amazonaws.com/smartpay-service:latest
+        ports:
+        - containerPort: 8000
